@@ -1,0 +1,6 @@
+name = "jungdong-subway-api"
+main = "worker/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+ALLOWED_ORIGIN = "https://leedahye950627.github.io"
