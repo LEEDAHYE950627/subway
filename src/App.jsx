@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowUpRight, ArrowDownLeft, TrainFront, Radio, RefreshCw, Maximize, Minimize, ArrowRight, CircleHelp, WifiOff } from './icons';
 import { arrivalTiming, isStale, selectTrains, trainPosition } from './arrival';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://jungdong-subway-live-api.tallpancake.chatgpt.site' : '')).replace(/\/$/, '');
 const clock = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 const dateFormat = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 const shortClock = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
