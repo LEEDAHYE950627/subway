@@ -15,7 +15,12 @@ test('API handles upstream errors, empty service, filtering and only merges in-f
   await assert.rejects(getArrivals('test-secret', async () => Response.json({ code: 'ERROR-336', message: '최대 1000건' })), /ERROR-336.*최대 1000건/);
   await assert.rejects(getArrivals('test-secret', async () => Response.json({ RESULT: { code: 'ERROR-336', message: '최대 1000건' } })), /ERROR-336/);
   let requests = 0;
+  let positionRequests = 0;
   const fetcher = async (url) => {
+    if (url.includes('/realtimePosition/')) {
+      positionRequests++;
+      return Response.json({ realtimePositionList: [{ subwayId: '1001', trainNo: '0042', directAt: '0' }] });
+    }
     assert.ok(url.endsWith('/json/realtimeStationArrival/1/100/%EC%A4%91%EB%8F%99/'));
     requests++;
     return Response.json({ errorMessage: { code: 'INFO-000' }, realtimeArrivalList: [
@@ -31,8 +36,36 @@ test('API handles upstream errors, empty service, filtering and only merges in-f
   assert.equal(first.arrivals[0].privateField, undefined);
   await getArrivals('test-secret', fetcher);
   assert.equal(requests, 2);
+  assert.equal(positionRequests, 1);
   const { getArrivals: empty } = await import('../server/arrivals.js?case=empty');
   assert.deepEqual((await empty('test-secret', async () => Response.json({ errorMessage: { code: 'INFO-200' } }))).arrivals, []);
+});
+
+test('cross-checks local service and excludes express trains mislabeled as normal', async () => {
+  const { stoppingAtJungdong } = await import('../server/arrivals.js');
+  const arrivals = [
+    { btrainNo: '0152', btrainSttus: '일반', ordkey: '01002연천0' },
+    { btrainNo: '1109', btrainSttus: '일반', ordkey: '12006동인천0' },
+    { btrainNo: '2', btrainSttus: '일반', trainLineNm: '동인천행 (특급)' },
+    { btrainNo: '3', btrainSttus: ' 일반 ', ordkey: '01005용산1' },
+    { btrainNo: '4', btrainSttus: 'ITX-청춘' },
+    { btrainNo: '5', btrainSttus: '일반' },
+  ];
+  const positions = [
+    { subwayId: '1001', trainNo: 'K152', directAt: '0' },
+    { subwayId: '1001', trainNo: '1109', directAt: '1' },
+    ...['2', '3', '4'].map(trainNo => ({ subwayId: '1001', trainNo, directAt: '0' })),
+  ];
+  assert.deepEqual(stoppingAtJungdong(arrivals, positions).map(row => row.btrainNo), ['0152']);
+  assert.deepEqual(stoppingAtJungdong(arrivals, []), []);
+});
+
+test('does not return unverified arrivals when service classification fails', async () => {
+  const { getArrivals } = await import('../server/arrivals.js?case=position-failure');
+  const fetcher = async url => url.includes('/realtimePosition/')
+    ? new Response('unavailable', { status: 503 })
+    : Response.json({ realtimeArrivalList: [{ subwayId: '1001', statnNm: '중동', btrainNo: '1109', btrainSttus: '일반' }] });
+  await assert.rejects(getArrivals('secret-test-key', fetcher), /정차 여부/);
 });
 test('Worker restricts routes, methods and browser origins', async () => {
   const env = { ALLOWED_ORIGIN: 'https://example.github.io' };
@@ -45,3 +78,4 @@ test('Worker restricts routes, methods and browser origins', async () => {
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), env.ALLOWED_ORIGIN);
   assert.match((await response.json()).error, /인증키/);
 });
+
