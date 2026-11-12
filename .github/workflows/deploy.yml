@@ -18,15 +18,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+          cache: npm
+      - run: npm ci
       - run: npm test
+      - name: Verify live API connection
+        run: node scripts/check-api.js
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://jungdong-subway-live-api.tallpancake.chatgpt.site' }}
+          PAGES_ORIGIN: https://${{ github.repository_owner }}.github.io
       - run: npm run build
         env:
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: production-build
-          path: dist
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://jungdong-subway-live-api.tallpancake.chatgpt.site' }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

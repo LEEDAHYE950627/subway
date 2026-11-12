@@ -3,4 +3,5 @@ main = "worker/index.js"
 compatibility_date = "2026-11-01"
 
 [vars]
+# Origin only: no repository path or trailing slash.
 ALLOWED_ORIGIN = "https://leedahye950627.github.io"

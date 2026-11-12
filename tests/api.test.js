@@ -79,3 +79,37 @@ test('Worker restricts routes, methods and browser origins', async () => {
   assert.match((await response.json()).error, /인증키/);
 });
 
+test('source timestamp updates preserve the first observation of unchanged status', async () => {
+  const { getArrivals } = await import('../server/arrivals.js?case=unchanged');
+  let recptnDt = '2026-11-06 12:00:00';
+  let arvlCd = '1';
+  const fetcher = async url => Response.json(url.includes('/realtimePosition/')
+    ? { realtimePositionList: [{ subwayId: '1001', trainNo: '42', directAt: '0' }] }
+    : { realtimeArrivalList: [{ subwayId: '1001', statnNm: '중동', btrainNo: '42', updnLine: '상행', arvlCd, recptnDt }] });
+  const first = (await getArrivals('test-key', fetcher)).arrivals[0];
+  await new Promise(resolve => setTimeout(resolve, 10));
+  recptnDt = '2026-11-06 12:01:00';
+  assert.equal((await getArrivals('test-key', fetcher)).arrivals[0].observedAt, first.observedAt);
+  arvlCd = '2';
+  assert.ok((await getArrivals('test-key', fetcher)).arrivals[0].observedAt > first.observedAt);
+});
+
+test('keeps Gyeongwon express stopping at Jungdong and rejects Gyeongin express', async () => {
+  const { stoppingAtJungdong } = await import('../server/arrivals.js');
+  const stopping = [
+    { btrainNo: '0101', bstatnNm: '동두천', updnLine: '상행', btrainSttus: '급행', ordkey: '01002동두천1' },
+    { btrainNo: '102', trainLineNm: '동두천행(급) - 상행', updnLine: '상행', btrainSttus: '급행' },
+    { btrainNo: '103', bstatnNm: '인천', updnLine: '하행', btrainSttus: '급행' },
+  ];
+  const passing = [
+    { btrainNo: '104', bstatnNm: '동인천', updnLine: '하행', btrainSttus: '급행' },
+    { btrainNo: '105', bstatnNm: '용산', updnLine: '상행', btrainSttus: '급행' },
+    { btrainNo: '106', bstatnNm: '동두천', updnLine: '상행', btrainSttus: '특급' },
+  ];
+  const positions = [...stopping, ...passing].map(row => ({ subwayId: '1001', trainNo: row.btrainNo, directAt: '1' }));
+  const result = stoppingAtJungdong([...stopping, ...passing], positions);
+  assert.deepEqual(result.map(row => row.btrainNo), stopping.map(row => row.btrainNo));
+  const { selectTrains } = await import('../src/arrival.js');
+  assert.deepEqual(selectTrains(result, '상행').map(row => row.btrainNo).sort(), ['0101', '102']);
+  assert.deepEqual(stoppingAtJungdong(stopping, []), []);
+});

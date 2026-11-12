@@ -3,10 +3,23 @@ let positionCache;
 const trainId = value => String(value ?? '').trim().replace(/^K/i, '').replace(/^0+(?=\d)/, '');
 
 export function stoppingAtJungdong(arrivals, positions) {
-  const localTrains = new Set(positions.filter(row => String(row.subwayId) === '1001' && String(row.directAt) === '0').map(row => trainId(row.trainNo)));
-  return arrivals.filter(row => localTrains.has(trainId(row.btrainNo))
-    && !/급행|특급|ITX/i.test(`${row.btrainSttus ?? ''} ${row.trainLineNm ?? ''}`)
-    && !/^[01]\d\d{3}.+[1-9]$/.test(String(row.ordkey ?? '')));
+  const trains = new Map(positions.filter(row => String(row.subwayId) === '1001').map(row => [trainId(row.trainNo), row]));
+  return arrivals.filter(row => {
+    const position = trains.get(trainId(row.btrainNo));
+    if (!position) return false;
+    const service = row.btrainSttus + ' ' + (row.trainLineNm || '');
+    if (/특급|ITX/i.test(service)) return false;
+    const destination = String(row.bstatnNm || row.trainLineNm?.split(' - ')[0] || '')
+      .replace(/\([^)]*\)/g, '').replace(/\s/g, '').replace(/행$/, '');
+    // Gyeongwon express trains stop locally on the Gyeongin section.
+    // Do not confuse Incheon with Dongincheon (Gyeongin express).
+    const localSectionExpress = (destination === '동두천' && row.updnLine === '상행')
+      || (destination === '인천' && row.updnLine === '하행');
+    if (localSectionExpress) return ['0', '1'].includes(String(position.directAt));
+    return String(position.directAt) === '0'
+      && !/급행/.test(service)
+      && !/^[01]\d\d{3}.+[1-9]$/.test(String(row.ordkey ?? ''));
+  });
 }
 
 async function getPositions(key, fetcher) {
@@ -25,7 +38,7 @@ async function getPositions(key, fetcher) {
 const observations = new Map();
 function observe(row) {
   const id = `${row.updnLine}:${row.btrainNo}`;
-  const signature = JSON.stringify([row.recptnDt, row.arvlCd, row.arvlMsg2, row.ordkey]);
+  const signature = JSON.stringify([row.arvlCd, row.arvlMsg2, row.arvlMsg3, row.ordkey]);
   const previous = observations.get(id);
   const observedAt = previous?.signature === signature ? previous.observedAt : Date.now();
   observations.set(id, { signature, observedAt });
@@ -71,4 +84,3 @@ export async function getArrivals(key, fetcher = fetch) {
   })();
   try { return await pending; } finally { pending = undefined; }
 }
-

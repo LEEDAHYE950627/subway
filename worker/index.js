@@ -1,4 +1,5 @@
 import { getArrivals } from '../server/arrivals.js';
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin');
